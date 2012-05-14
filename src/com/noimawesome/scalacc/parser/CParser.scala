@@ -13,7 +13,7 @@ import java.io.FileNotFoundException
 class CParser(fileLocation: String) {
   var source: String = openFile()
 
-  print ("Can be printed = " + CheckCSyntax.parse(source))
+  print ("Can be parsed = " + CheckCSyntax.parse(source))
 
 
   def openFile(): String = {
