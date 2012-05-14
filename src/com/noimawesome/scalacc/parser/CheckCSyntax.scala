@@ -1,102 +1,100 @@
 package com.noimawesome.scalacc.parser
 
-import util.parsing.combinator.RegexParsers
+import scala.util.parsing.combinator.JavaTokenParsers
 
 
-class CheckCSyntax extends RegexParsers {
+object CheckCSyntax extends JavaTokenParsers {
 
-  val char_const = """."""r
-  val id = """[a-zA-Z]([a-zA-Z-_]*)[a-zA-Z]"""r
-  val string = """.*"""r
-  val numericLit = """[1-9][0-9]*"""r
+  def parse(s:String) = parseAll(external_decl,s) match {
+    case Success(res,_) => true
+    case _ => false
+  }
+  // Constant or literal regex definitions go here
+  val char_const = stringLiteral
+  val id = ident
+  val string = stringLiteral
+  val numericLit = wholeNumber
 
-  def translation_unit: Parser[Any] = external_decl | translation_unit ~ external_decl
 
-  def external_decl: Parser[Any] = function_definition | decl
+  // Parser partial functions begin here. Because C has a recursive grammar, we need to explicitly state the return type.
+  // Being as vague as possible (i.e. Parser[Any]) appears to be the best approach
 
-  def function_definition: Parser[Any] = ((decl_specs ~ declarator ~ decl_list ~ compound_stat)
-    | (declarator ~ decl_list ~ compound_stat)
-    | (decl_specs ~ declarator ~compound_stat)
-    | declarator ~ compound_stat)
+  def translation_unit: Parser[Any] = external_decl+
 
-  def decl: Parser[Any] = decl_specs ~ init_declarator_list ~ ";" | decl_specs ~ ";"
+  def external_decl = function_definition | decl
 
-  def decl_list: Parser[Any] = decl | decl_list ~ decl
+  def function_definition = decl_specs.? ~ declarator ~ decl_list.? ~ compound_stat
 
-  def decl_specs: Parser[Any] = (storage_class_spec ~ decl_specs
-    | storage_class_spec
-    | type_spec ~ decl_specs
-    | type_spec
-    | type_qualifier ~ decl_specs
-    | type_qualifier)
+  def decl: Parser[Any] = decl_specs ~ init_declarator_list.? ~ ";"
 
-  def storage_class_spec: Parser[String] = "auto" | "register" | "static" | "extern" | "typedef"
-  
-  def type_spec: Parser[Any] = "void" | "char" | "short" | "int" | "long" | "float" | "double" | "signed" | "unsigned" | struct_or_union_spec | enum_spec | typedef_name
-  
+  def decl_list = decl+
+
+  def decl_specs: Parser[Any] = (storage_class_spec|type_spec|type_qualifier) ~ (decl_specs?)
+
+  def storage_class_spec = "auto" | "register" | "static" | "extern" | "typedef"
+
+  def type_spec = ("void" | "char" | "short" | "int" | "long"
+    | "float" | "double" | "signed" | "unsigned"
+    | struct_or_union_spec | enum_spec | typedef_name )
+
   def type_qualifier: Parser[String] = "const" | "volatile"
 
-  def struct_or_union_spec: Parser[Any] = (struct_or_union ~ id ~ "{" ~ struct_decl_list ~ "}" | struct_or_union ~ "{" ~ struct_decl_list ~ "}" | struct_or_union ~ id)
+  def struct_or_union_spec: Parser[Any] = (struct_or_union ~ id ~ "{" ~ struct_decl_list ~ "}"
+    | struct_or_union ~ "{" ~ struct_decl_list ~ "}"
+    | struct_or_union ~ id)
 
-  def struct_or_union: Parser[String] = "struct" | "union"
+  def struct_or_union: Parser[Any] = "struct" | "union"
 
-  def struct_decl_list: Parser[Any] = (struct_decl
-    | struct_decl_list ~ struct_decl)
+  def struct_decl_list: Parser[Any] = struct_decl+
 
-  def init_declarator_list: Parser[Any] = (init_declarator
+  def init_declarator_list: Parser[Any] = (
+      init_declarator
     | init_declarator_list ~ "," ~ init_declarator)
 
-  def init_declarator: Parser[Any] = (declarator
-    | declarator ~ "=" ~ initializer)
+  def init_declarator: Parser[Any] = declarator ~ ("=" ~ initializer)?
 
-  def struct_decl: Parser[Any] = (spec_qualifier_list ~ struct_declarator_list ~ ";")
+  def struct_decl: Parser[Any] = spec_qualifier_list ~ struct_declarator_list ~ ";"
 
-  def spec_qualifier_list: Parser[Any] = (type_spec ~ spec_qualifier_list
-    | type_spec
-    | type_qualifier ~ spec_qualifier_list
-    | type_qualifier)
+  def spec_qualifier_list: Parser[Any] = (type_spec | type_qualifier) ~ spec_qualifier_list?
 
-  def struct_declarator_list: Parser[Any] = (struct_declarator
-  | struct_declarator_list ~ "," ~ struct_declarator)
 
-  def struct_declarator: Parser[Any] = (declarator
-  | declarator ~ ":" ~ const_exp
-  | ":" ~ const_exp)
+  def struct_declarator_list: Parser[Any] = ((struct_declarator_list ~ ",")?) ~ struct_declarator
 
-  def enum_spec: Parser[Any] = ("enum" ~ id ~ "{" ~ enumerator_list ~ "}"
-    | "enum" ~ "{" ~ enumerator_list ~ "}"
+  def struct_declarator: Parser[Any] = (declarator?) ~ (":" ~ const_exp)?
+
+  def enum_spec: Parser[Any] = (
+      "enum" ~ (id?) ~ "{" ~ enumerator_list ~ "}"
     | "enum" ~ id)
 
-  def enumerator_list: Parser[Any] = (enumerator
-    | enumerator_list ~ "," ~ enumerator)
+  def enumerator_list: Parser[Any] = (enumerator_list ~ ",").? ~ enumerator
 
-  def enumerator: Parser[Any] = (id
+  def enumerator: Parser[Any] = (
+      id
     | id ~ "=" ~ const_exp)
 
-  def declarator: Parser[Any] = (pointer ~ direct_declarator
-    | direct_declarator)
+  def declarator: Parser[Any] = (pointer?) ~ direct_declarator
 
-  def direct_declarator: Parser[Any] = ( id
+  def direct_declarator: Parser[Any] = (
+      id
     | "(" ~ declarator ~ ")"
     | direct_declarator ~ "[" ~ const_exp ~ "]"
     | direct_declarator ~ "[" ~ "]"
     | direct_declarator ~ "(" ~ param_type_list ~ ")"
     | direct_declarator ~ "(" ~ id_list ~ ")"
-    | direct_declarator ~ "("~ ")")
+    | direct_declarator ~ "(" ~ ")")
 
-  def pointer : Parser[Any] = ("*" ~ type_qualifier_list
-    | "*"
-    | "*" ~ type_qualifier_list ~ pointer
-    | "*" ~ pointer)
+  def pointer : Parser[Any] = (
+    "*" ~ ((type_qualifier_list?) ~ (pointer?)?))
 
-  def type_qualifier_list : Parser[Any] = (type_qualifier
-    | type_qualifier_list ~ type_qualifier)
+  def type_qualifier_list : Parser[Any] = type_qualifier+
 
-  def param_type_list: Parser[Any] = param_list | param_list ~ "," ~ "..."
+  def param_type_list: Parser[Any] = param_list ~ ("," ~ "...")?
 
-  def param_list: Parser[Any] = param_decl | param_list ~ "," ~ param_decl
+  def param_list: Parser[Any] = (
+    ((param_list ~ ",")?) ~ param_decl)
 
-  def param_decl: Parser[Any] = decl_specs ~ declarator | decl_specs ~ abstract_declarator | decl_specs
+  def param_decl: Parser[Any] = (
+      decl_specs ~ (declarator | abstract_declarator)? )
 
   def id_list: Parser[Any] = id | id_list ~ "," ~ id
 
