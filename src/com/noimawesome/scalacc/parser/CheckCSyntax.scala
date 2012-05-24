@@ -11,11 +11,9 @@ object CheckCSyntax extends JavaTokenParsers {
       println(e)
       false }
   }
+
   // Constant or literal regex definitions go here
-  val char_const = stringLiteral
-  val id = ident
-  val string = stringLiteral
-  val numericLit = wholeNumber
+  val char_const = "\'.\'"
 
   // Parser partial functions begin here. Because C has a recursive grammar, we need to explicitly state the return type.
   // Being as vague as possible (i.e. Parser[Any]) appears to be the best approach
@@ -26,72 +24,68 @@ object CheckCSyntax extends JavaTokenParsers {
 
   def function_definition = (
     decl_specs ~ declarator ~ decl_list ~ compound_stat
-  | declarator ~ decl_list ~ compound_stat
-  | decl_specs ~ declarator ~ compound_stat
-  | declarator ~ compound_stat )
+  |              declarator ~ decl_list ~ compound_stat
+  | decl_specs ~ declarator ~             compound_stat
+  |              declarator ~             compound_stat )
 
   def decl: Parser[Any] = decl_specs ~ init_declarator_list.? ~ ";"
 
   def decl_list = decl.+
 
   def decl_specs: Parser[Any] = (
-    storage_class_spec ~ decl_specs
-  | storage_class_spec
-  | type_spec ~ decl_specs
-  | type_spec
-  | type_qualifier ~ decl_specs
-  | type_qualifier )
+    storage_class_spec ~ decl_specs.?
+  | type_spec ~ decl_specs.?
+  | type_qualifier ~ decl_specs.? )
 
   def storage_class_spec = "auto" | "register" | "static" | "extern" | "typedef"
 
-  def type_spec = ("void" | "char" | "short" | "int" | "long"
+  def type_spec = (
+      "void" | "char" | "short" | "int" | "long"
     | "float" | "double" | "signed" | "unsigned"
     | struct_or_union_spec | enum_spec | typedef_name )
 
-  def type_qualifier: Parser[String] = "const" | "volatile"
+  def type_qualifier = "const" | "volatile"
 
   def struct_or_union_spec: Parser[Any] = (
-      struct_or_union ~ id ~ "{" ~ struct_decl_list ~ "}"
-    | struct_or_union ~ "{" ~ struct_decl_list ~ "}"
-    | struct_or_union ~ id )
+      struct_or_union ~ ident ~ "{" ~ struct_decl_list ~ "}"
+    | struct_or_union ~         "{" ~ struct_decl_list ~ "}"
+    | struct_or_union ~ ident )
 
-  def struct_or_union: Parser[Any] = "struct" | "union"
+  def struct_or_union = "struct" | "union"
 
-  def struct_decl_list: Parser[Any] = struct_decl.+
+  def struct_decl_list = struct_decl.+
 
   def init_declarator_list: Parser[Any] = (init_declarator ~ ",").* ~ init_declarator
 
-  def init_declarator: Parser[Any] = declarator ~ ("=" ~ initializer).?
+  def init_declarator: Parser[Any] = ( declarator | declarator ~ "=" ~ initializer )
 
   def struct_decl: Parser[Any] = spec_qualifier_list ~ struct_declarator_list ~ ";"
 
   def spec_qualifier_list: Parser[Any] = (
-    type_spec ~ spec_qualifier_list
-  | type_spec
-  | type_qualifier ~ spec_qualifier_list
-  | type_qualifier )
+    type_spec ~ spec_qualifier_list.?
+  | type_qualifier ~ spec_qualifier_list.? )
 
   def struct_declarator_list: Parser[Any] = (struct_declarator ~ ",").* ~ struct_declarator
 
   def struct_declarator: Parser[Any] = (
     declarator
   | declarator ~ ":" ~ const_exp
-  | ":" ~ const_exp )
+  |              ":" ~ const_exp )
 
   def enum_spec: Parser[Any] = (
-      "enum" ~ id ~ "{" ~ enumerator_list ~ "}"
-    | "enum" ~ "{" ~ enumerator_list ~ "}"
-    | "enum" ~ id )
+      "enum" ~ ident ~ "{" ~ enumerator_list ~ "}"
+    | "enum" ~         "{" ~ enumerator_list ~ "}"
+    | "enum" ~ ident )
 
   def enumerator_list: Parser[Any] = (enumerator ~ ",").* ~ enumerator
 
-  def enumerator: Parser[Any] = id ~ ("=" ~ const_exp ).?
+  def enumerator: Parser[Any] = ( ident | ident ~ "=" ~ const_exp )
 
   def declarator: Parser[Any] = pointer ~ direct_declarator | direct_declarator
 
   def direct_declarator: Parser[Any] = direct_declarator_1 ~ direct_declarator_2.*
 
-  def direct_declarator_1 = id | "(" ~ declarator ~ ")"
+  def direct_declarator_1 = ident | "(" ~ declarator ~ ")"
 
   def direct_declarator_2 = (
     "[" ~ const_exp.? ~ "]"
@@ -101,7 +95,7 @@ object CheckCSyntax extends JavaTokenParsers {
     "*" ~ type_qualifier_list
   | "*"
   | "*" ~ type_qualifier_list ~ pointer
-  | "*" ~ pointer )
+  | "*" ~                       pointer )
 
   def type_qualifier_list : Parser[Any] = type_qualifier.+
 
@@ -116,7 +110,7 @@ object CheckCSyntax extends JavaTokenParsers {
   | decl_specs ~ abstract_declarator
   | decl_specs )
 
-  def id_list: Parser[Any] = (id_list ~ ",").* ~ id
+  def id_list = (ident ~ ",").* ~ ident
 
   def initializer: Parser[Any] = (
     assignment_exp
@@ -125,16 +119,14 @@ object CheckCSyntax extends JavaTokenParsers {
 
   def initializer_list: Parser[Any] = (initializer ~ ",").* ~ initializer
 
-  def type_name: Parser[Any] = (
-    spec_qualifier_list ~ abstract_declarator
-  | spec_qualifier_list )
+  def type_name: Parser[Any] = spec_qualifier_list ~ abstract_declarator.?
 
   def abstract_declarator = (
     pointer
   | pointer ~ direct_abstract_declarator
-  | direct_abstract_declarator )
+  |           direct_abstract_declarator )
 
-  def direct_abstract_declarator = direct_abstract_declarator_1 ~ (direct_abstract_declarator_2.*)
+  def direct_abstract_declarator = direct_abstract_declarator_1 ~ direct_abstract_declarator_2.*
 
   def direct_abstract_declarator_1: Parser[Any] = (
     "(" ~ abstract_declarator ~ ")"
@@ -149,7 +141,7 @@ object CheckCSyntax extends JavaTokenParsers {
   | "(" ~ param_type_list ~ ")"
   | "(" ~ ")" )
 
-  def typedef_name = id
+  def typedef_name = ident
 
   def stat: Parser[Any] = (
     labeled_stat
@@ -160,17 +152,17 @@ object CheckCSyntax extends JavaTokenParsers {
   | jump_stat)
 
   def labeled_stat: Parser[Any] = (
-      id ~ ":" ~ stat
+      ident ~              ":" ~ stat
     | "case" ~ const_exp ~ ":" ~ stat
-    | "default" ~ ":" ~ stat)
+    | "default" ~          ":" ~ stat)
 
   def exp_stat: Parser[Any] = exp ~ ";" | ";"
 
   def compound_stat: Parser[Any] = (
     "{" ~ decl_list ~ stat_list ~ "}"
-  | "{" ~ stat_list ~ "}"
-  | "{" ~ decl_list ~ "}"
-  | "{" ~ "}" )
+  | "{" ~ stat_list ~             "}"
+  | "{" ~             decl_list ~ "}"
+  | "{" ~                         "}" )
 
   def stat_list: Parser[Any] = (stat.*) ~ stat
 
@@ -183,24 +175,21 @@ object CheckCSyntax extends JavaTokenParsers {
       "while" ~ "(" ~ exp ~ ")" ~ stat
     | "do" ~ stat ~ "while" ~ "(" ~ exp ~ ")" ~ ";"
     | "for" ~ "(" ~ exp ~ ";" ~ exp ~ ";" ~ exp ~ ")" ~ stat
-    | "for" ~ "(" ~ exp ~ ";" ~ exp ~ ";" ~ ")" ~ stat
-    | "for" ~ "(" ~ exp ~ ";" ~ ";" ~ exp ~ ")" ~ stat
-    | "for" ~ "(" ~ exp ~ ";" ~";" ~ ")" ~ stat
-    | "for" ~ "(" ~ ";" ~ exp ~ ";" ~ exp ~ ")" ~ stat
-    | "for" ~ "(" ~ ";" ~ exp ~ ";" ~ ")" ~ stat
-    | "for" ~ "(" ~ ";" ~ ";" ~ exp ~ ")" ~ stat
-    | "for" ~ "(" ~ ";" ~ ";" ~ ")" ~ stat)
+    | "for" ~ "(" ~ exp ~ ";" ~ exp ~ ";" ~       ")" ~ stat
+    | "for" ~ "(" ~ exp ~ ";" ~       ";" ~ exp ~ ")" ~ stat
+    | "for" ~ "(" ~ exp ~ ";" ~       ";" ~       ")" ~ stat
+    | "for" ~ "(" ~       ";" ~ exp ~ ";" ~ exp ~ ")" ~ stat
+    | "for" ~ "(" ~       ";" ~ exp ~ ";" ~       ")" ~ stat
+    | "for" ~ "(" ~       ";" ~       ";" ~ exp ~ ")" ~ stat
+    | "for" ~ "(" ~       ";" ~       ";" ~       ")" ~ stat )
 
   def jump_stat: Parser[Any] = (
-    "goto" ~ id ~ ";"
-  | "continue" ~ ";"
-  | "break" ~ ";"
-  | "return" ~ exp ~ ";"
-  | "return" ~ ";")
+    "goto" ~ ident ~ ";"
+  | "continue" ~     ";"
+  | "break" ~        ";"
+  | "return" ~ exp.? ~ ";" )
 
-  def exp: Parser[Any] = (
-    assignment_exp
-  | (exp ~ ",").* ~ assignment_exp)
+  def exp: Parser[Any] = (assignment_exp ~ ",").* ~ assignment_exp
 
   def assignment_exp: Parser[Any] = (
     conditional_exp
@@ -208,7 +197,7 @@ object CheckCSyntax extends JavaTokenParsers {
 
   def assignment_operator = "=" | "*=" | "/=" | "%=" | "+=" | "-=" | "<<=" | ">>=" | "&=" | "^=" | "|="
 
-  def conditional_exp: Parser[Any] = logical_or_exp | logical_or_exp ~ "?" ~ exp ~ ":" ~ conditional_exp
+  def conditional_exp: Parser[Any] = logical_or_exp ~ ("?" ~ exp ~ ":" ~ conditional_exp).?
 
   def const_exp: Parser[Any] = conditional_exp
 
@@ -222,35 +211,22 @@ object CheckCSyntax extends JavaTokenParsers {
 
   def and_exp: Parser[Any] = equality_exp ~ ("&" ~ and_exp).*
 
-  def equality_exp: Parser[Any] = (
-      relational_exp ~ ("==" ~ equality_exp).*
-    | relational_exp ~ ("!=" ~ equality_exp).* )
+  def equality_exp: Parser[Any] = relational_exp ~ (( "==" | "!=") ~ equality_exp).*
 
-  def relational_exp: Parser[Any] = (
-      shift_expression ~ ("<" ~ relational_exp).*
-    | shift_expression ~ (">" ~ relational_exp).*
-    | shift_expression ~ ("<=" ~ relational_exp).*
-    | shift_expression ~ (">=" ~ relational_exp).* )
+  def relational_exp: Parser[Any] = shift_expression ~ (("<" | ">" | "<=" | ">=") ~ relational_exp).*
 
-  def shift_expression: Parser[Any] = (
-      additive_exp
-    | additive_exp ~ "<<" ~ (shift_expression).*
-    | additive_exp ~ ">>" ~ (shift_expression).* )
+  def shift_expression: Parser[Any] = additive_exp ~ (("<<" | ">>") ~ shift_expression).*
 
-  def additive_exp: Parser[Any] = (
-       mult_exp ~ ("+" ~ additive_exp).*
-    |  mult_exp ~ ("-" ~ additive_exp).* )
+  def additive_exp: Parser[Any] = mult_exp ~ (("+" | "-") ~ additive_exp).*
 
-  def mult_exp: Parser[Any] = (
-      cast_exp ~ ("*" ~ mult_exp).*
-    | cast_exp ~ ("/" ~ mult_exp).*
-    | cast_exp ~ ("%" ~ mult_exp).* )
+  def mult_exp: Parser[Any] = cast_exp ~ (("*" | "/" | "%") ~ mult_exp).*
 
   def cast_exp: Parser[Any] = (
       unary_exp
     | "(" ~ type_name ~ ")" ~ cast_exp)
 
-  def unary_exp: Parser[Any] = (postfix_exp
+  def unary_exp: Parser[Any] = (
+      postfix_exp
     | "++" ~ unary_exp
     | "--" ~ unary_exp
     | unary_operator ~ cast_exp
@@ -260,24 +236,23 @@ object CheckCSyntax extends JavaTokenParsers {
   def unary_operator: Parser[String] = "&" | "*" | "+" | "-" | "~" | "!"
 
   def postfix_exp: Parser[Any] = (
-      primary_exp ~ postfix_exp ~ "[" ~ exp ~ "]"
+      primary_exp
+    | primary_exp ~ postfix_exp ~ "[" ~ exp ~ "]"
     | primary_exp ~ postfix_exp ~ "(" ~ argument_exp_list ~ ")"
-    | primary_exp ~ postfix_exp ~ "(" ~ ")"
-    | primary_exp ~ postfix_exp ~ "." ~ id
-    | primary_exp ~ postfix_exp ~ "->" ~ id
+    | primary_exp ~ postfix_exp ~ "(" ~                     ")"
+    | primary_exp ~ postfix_exp ~ "." ~ ident
+    | primary_exp ~ postfix_exp ~ "->" ~ ident
     | primary_exp ~ postfix_exp ~ "++"
     | primary_exp ~ postfix_exp ~ "--")
 
   def primary_exp: Parser[Any] = (
-      id
+      ident
     | const
-    | string
-    | "(" ~ exp ~ ")")
+    | stringLiteral
+    | "(" ~ exp ~ ")" )
 
   def argument_exp_list: Parser[Any] = (assignment_exp ~ ",").* ~ assignment_exp
 
-  def const = (
-      numericLit
-    | char_const )
+  def const = wholeNumber | char_const | floatingPointNumber
 
 }
