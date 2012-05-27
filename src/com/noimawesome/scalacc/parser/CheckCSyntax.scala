@@ -6,14 +6,17 @@ import scala.util.parsing.combinator.JavaTokenParsers
 object CheckCSyntax extends JavaTokenParsers {
 
   def parse(s:String) = parseAll(translation_unit,s) match {
-    case Success(res,_) => true
+    case Success(res,x) => {println(res); true }
     case e:NoSuccess => {
       println(e)
       false }
   }
 
   // Constant or literal regex definitions go here
-  val char_const = "\'.\'"
+  // Only thing that needs to be defined is the char_const, everything else is already defined in the javatokenparser
+
+  // This is looks like it works. Should match a single character
+  val char_const = "\'.\'"r
 
   // Parser partial functions begin here. Because C has a recursive grammar, we need to explicitly state the return type.
   // Being as vague as possible (i.e. Parser[Any]) appears to be the best approach
@@ -235,15 +238,16 @@ object CheckCSyntax extends JavaTokenParsers {
 
   def unary_operator: Parser[String] = "&" | "*" | "+" | "-" | "~" | "!"
 
-  def postfix_exp: Parser[Any] = (
-      primary_exp
-    | primary_exp ~ postfix_exp ~ "[" ~ exp ~ "]"
-    | primary_exp ~ postfix_exp ~ "(" ~ argument_exp_list ~ ")"
-    | primary_exp ~ postfix_exp ~ "(" ~                     ")"
-    | primary_exp ~ postfix_exp ~ "." ~ ident
-    | primary_exp ~ postfix_exp ~ "->" ~ ident
-    | primary_exp ~ postfix_exp ~ "++"
-    | primary_exp ~ postfix_exp ~ "--")
+  def postfix_exp: Parser[Any] = primary_exp ~ postfix_exp1.*
+
+  def postfix_exp1 = (
+      "[" ~ exp ~ "]"
+    | "(" ~ argument_exp_list ~ ")"
+    | "(" ~                     ")"
+    | "." ~ ident
+    | "->" ~ ident
+    | "++"
+    | "--")
 
   def primary_exp: Parser[Any] = (
       ident
