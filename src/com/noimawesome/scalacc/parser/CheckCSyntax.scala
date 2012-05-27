@@ -1,22 +1,22 @@
 package com.noimawesome.scalacc.parser
 
-import scala.util.parsing.combinator.JavaTokenParsers
+import util.parsing.combinator.JavaTokenParsers
+import util.parsing.combinator.lexical.StdLexical
 
+object CheckCSyntax extends JavaTokenParsers  {
 
-object CheckCSyntax extends JavaTokenParsers {
-
-  def parse(s:String) = parseAll(translation_unit,s) match {
-    case Success(res,x) => {println(res); true }
-    case e:NoSuccess => {
-      println(e)
-      false }
-  }
+  def parse(s:String) = {
+    parseAll(translation_unit,s) match {
+      case Success(res,x) => { println(res); true }
+      case e:NoSuccess => { println(e); false }
+      }
+    }
 
   // Constant or literal regex definitions go here
   // Only thing that needs to be defined is the char_const, everything else is already defined in the javatokenparser
 
   // This is looks like it works. Should match a single character
-  val char_const = "\'.\'"r
+  def char_const: Parser[String] = "\'.\'"r
 
   // Parser partial functions begin here. Because C has a recursive grammar, we need to explicitly state the return type.
   // Being as vague as possible (i.e. Parser[Any]) appears to be the best approach
@@ -26,19 +26,17 @@ object CheckCSyntax extends JavaTokenParsers {
   def external_decl = function_definition | decl
 
   def function_definition = (
-    decl_specs ~ declarator ~ decl_list ~ compound_stat
-  |              declarator ~ decl_list ~ compound_stat
-  | decl_specs ~ declarator ~             compound_stat
-  |              declarator ~             compound_stat )
+    decl_specs.? ~ declarator ~ decl_list ~ compound_stat
+  | decl_specs.? ~ declarator ~             compound_stat )
 
-  def decl: Parser[Any] = decl_specs ~ init_declarator_list.? ~ ";"
+  def decl: Parser[Any] = decl_specs ~ (init_declarator_list.?) ~ ";"
 
   def decl_list = decl.+
 
   def decl_specs: Parser[Any] = (
     storage_class_spec ~ decl_specs.?
-  | type_spec ~ decl_specs.?
-  | type_qualifier ~ decl_specs.? )
+  | type_spec ~          decl_specs.?
+  | type_qualifier ~     decl_specs.? )
 
   def storage_class_spec = "auto" | "register" | "static" | "extern" | "typedef"
 
@@ -50,8 +48,7 @@ object CheckCSyntax extends JavaTokenParsers {
   def type_qualifier = "const" | "volatile"
 
   def struct_or_union_spec: Parser[Any] = (
-      struct_or_union ~ ident ~ "{" ~ struct_decl_list ~ "}"
-    | struct_or_union ~         "{" ~ struct_decl_list ~ "}"
+      struct_or_union ~ ident.? ~ "{" ~ struct_decl_list ~ "}"
     | struct_or_union ~ ident )
 
   def struct_or_union = "struct" | "union"
@@ -60,31 +57,27 @@ object CheckCSyntax extends JavaTokenParsers {
 
   def init_declarator_list: Parser[Any] = (init_declarator ~ ",").* ~ init_declarator
 
-  def init_declarator: Parser[Any] = ( declarator | declarator ~ "=" ~ initializer )
+  def init_declarator: Parser[Any] = declarator ~ ("=" ~ initializer).?
 
   def struct_decl: Parser[Any] = spec_qualifier_list ~ struct_declarator_list ~ ";"
 
-  def spec_qualifier_list: Parser[Any] = (
-    type_spec ~ spec_qualifier_list.?
-  | type_qualifier ~ spec_qualifier_list.? )
+  def spec_qualifier_list: Parser[Any] = (type_spec | type_qualifier) ~ spec_qualifier_list.?
 
   def struct_declarator_list: Parser[Any] = (struct_declarator ~ ",").* ~ struct_declarator
 
   def struct_declarator: Parser[Any] = (
-    declarator
-  | declarator ~ ":" ~ const_exp
-  |              ":" ~ const_exp )
+    declarator ~ (":" ~ const_exp).?
+  |               ":" ~ const_exp )
 
   def enum_spec: Parser[Any] = (
-      "enum" ~ ident ~ "{" ~ enumerator_list ~ "}"
-    | "enum" ~         "{" ~ enumerator_list ~ "}"
+      "enum" ~ ident.? ~ "{" ~ enumerator_list ~ "}"
     | "enum" ~ ident )
 
   def enumerator_list: Parser[Any] = (enumerator ~ ",").* ~ enumerator
 
-  def enumerator: Parser[Any] = ( ident | ident ~ "=" ~ const_exp )
+  def enumerator: Parser[Any] = ident ~ ("=" ~ const_exp).?
 
-  def declarator: Parser[Any] = pointer ~ direct_declarator | direct_declarator
+  def declarator: Parser[Any] = pointer.? ~ direct_declarator
 
   def direct_declarator: Parser[Any] = direct_declarator_1 ~ direct_declarator_2.*
 
@@ -95,96 +88,63 @@ object CheckCSyntax extends JavaTokenParsers {
   | "(" ~ (param_type_list|id_list).? ~ ")" )
 
   def pointer : Parser[Any] = (
-    "*" ~ type_qualifier_list
-  | "*"
-  | "*" ~ type_qualifier_list ~ pointer
-  | "*" ~                       pointer )
+    "*" ~ type_qualifier_list.?
+  | "*" ~ type_qualifier_list.? ~ pointer )
 
   def type_qualifier_list : Parser[Any] = type_qualifier.+
 
-  def param_type_list = (
-    param_list
-  | param_list ~ "," ~ "..." )
+  def param_type_list = param_list ~ ("," ~ "..." ).?
 
   def param_list = (param_decl ~ ",").* ~ param_decl
 
-  def param_decl: Parser[Any] = (
-    decl_specs ~ declarator
-  | decl_specs ~ abstract_declarator
-  | decl_specs )
+  def param_decl: Parser[Any] = decl_specs ~ (declarator | abstract_declarator).?
 
   def id_list = (ident ~ ",").* ~ ident
 
   def initializer: Parser[Any] = (
     assignment_exp
-  | "{" ~ initializer_list ~ "}"
-  | "{" ~ initializer_list ~ "," ~ "}" )
+  | "{" ~ initializer_list ~ ",".? ~ "}" )
 
   def initializer_list: Parser[Any] = (initializer ~ ",").* ~ initializer
 
   def type_name: Parser[Any] = spec_qualifier_list ~ abstract_declarator.?
 
   def abstract_declarator = (
-    pointer
-  | pointer ~ direct_abstract_declarator
+    pointer ~ direct_abstract_declarator.?
   |           direct_abstract_declarator )
 
   def direct_abstract_declarator = direct_abstract_declarator_1 ~ direct_abstract_declarator_2.*
 
   def direct_abstract_declarator_1: Parser[Any] = (
     "(" ~ abstract_declarator ~ ")"
-  | "[" ~ const_exp ~ "]"
-  | "[" ~ "]"
+  | "[" ~ const_exp.? ~ "]"
   | "(" ~ param_type_list ~ ")"
   | "(" ~ ")" )
 
   def direct_abstract_declarator_2 = (
-    "[" ~ const_exp ~ "]"
-  | "[" ~ "]"
-  | "(" ~ param_type_list ~ ")"
-  | "(" ~ ")" )
+    "[" ~ const_exp.? ~ "]"
+  | "(" ~ param_type_list.? ~ ")" )
 
   def typedef_name = ident
 
-  def stat: Parser[Any] = (
-    labeled_stat
-  | exp_stat
-  | compound_stat
-  | selection_stat
-  | iteration_stat
-  | jump_stat)
+  def stat: Parser[Any] = labeled_stat | exp_stat | compound_stat | selection_stat | iteration_stat | jump_stat
 
-  def labeled_stat: Parser[Any] = (
-      ident ~              ":" ~ stat
-    | "case" ~ const_exp ~ ":" ~ stat
-    | "default" ~          ":" ~ stat)
+  def labeled_stat: Parser[Any] = (ident | "case" ~ const_exp | "default") ~ ":" ~ stat
 
-  def exp_stat: Parser[Any] = exp ~ ";" | ";"
+  def exp_stat: Parser[Any] = exp.? ~ ";"
 
-  def compound_stat: Parser[Any] = (
-    "{" ~ decl_list ~ stat_list ~ "}"
-  | "{" ~ stat_list ~             "}"
-  | "{" ~             decl_list ~ "}"
-  | "{" ~                         "}" )
+  def compound_stat: Parser[Any] = "{" ~ decl_list.? ~ stat_list.? ~ "}"
 
   def stat_list: Parser[Any] = (stat.*) ~ stat
 
   def selection_stat = (
-      "if" ~ "(" ~ exp ~ ")" ~ stat
-    | "if" ~ "(" ~ exp ~ ")" ~ stat ~ "else" ~ stat
+      "if" ~ "(" ~ exp ~ ")" ~ stat ~ ("else" ~ stat).?
     | "switch" ~ "(" ~ exp ~ ")" ~ stat)
 
   def iteration_stat = (
       "while" ~ "(" ~ exp ~ ")" ~ stat
     | "do" ~ stat ~ "while" ~ "(" ~ exp ~ ")" ~ ";"
-    | "for" ~ "(" ~ exp ~ ";" ~ exp ~ ";" ~ exp ~ ")" ~ stat
-    | "for" ~ "(" ~ exp ~ ";" ~ exp ~ ";" ~       ")" ~ stat
-    | "for" ~ "(" ~ exp ~ ";" ~       ";" ~ exp ~ ")" ~ stat
-    | "for" ~ "(" ~ exp ~ ";" ~       ";" ~       ")" ~ stat
-    | "for" ~ "(" ~       ";" ~ exp ~ ";" ~ exp ~ ")" ~ stat
-    | "for" ~ "(" ~       ";" ~ exp ~ ";" ~       ")" ~ stat
-    | "for" ~ "(" ~       ";" ~       ";" ~ exp ~ ")" ~ stat
-    | "for" ~ "(" ~       ";" ~       ";" ~       ")" ~ stat )
+    | "for" ~ "(" ~ exp.? ~ ";" ~ exp.? ~ ";" ~ exp.? ~ ")" ~ stat )
 
   def jump_stat: Parser[Any] = (
     "goto" ~ ident ~ ";"
